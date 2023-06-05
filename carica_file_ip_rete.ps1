@@ -27,33 +27,36 @@ function Get-IPRange {
     # Ottiene l'indirizzo IP base per la subnet
     $baseIPNumeric = [System.BitConverter]::ToInt32($networkIP.GetAddressBytes(), 0)
 
-    # Scansione degli indirizzi IP all'interno della subnet
-    $activseIPs = @()
+    # Crea un elenco di job per la verifica degli indirizzi IP
+    $jobs = @()
     for ($i = 1; $i -le 255; $i++) {
         $ipBytes = [System.BitConverter]::GetBytes($baseIPNumeric)
         $ipBytes[3] = $i
         $ip = [System.Net.IPAddress]::new($ipBytes)
+        Write-Host "ip: " $ip
 
-        if (Test-Connection -ComputerName $ip.IPAddressToString -Count 1 -Quiet) {
-            $activeIPs += $ip.IPAddressToString
-        }
+        $job = Start-Job -ScriptBlock {
+            param ($ipAddress)
+            $result = Test-Connection -ComputerName $ipAddress -Count 1 -Quiet
+            if ($result) {
+                return $ipAddress
+            }
+        } -ArgumentList $ip.IPAddressToString
+
+        $jobs += $job
     }
+
+    # Attendi il completamento dei job
+    $activeIPs = @()
+    foreach ($job in $jobs) {
+        $result = Receive-Job $job
+        if ($result) {
+            $activeIPs += $result
+        }
+        Remove-Job $job -Force
+    }
+
     return $activeIPs
-}
-
-function Get-FreePorts{
-    param (
-        [string]$ip
-    )
-
-    $portRange = 54990..55000
-    $freePorts = @()  # Array per memorizzare le porte libere
-    foreach ($port in $portRange) {
-        if (Test-NetConnection -ComputerName $ip -Port $port -InformationLevel Quiet) {
-            $freePorts += $port
-        }
-    }
-    return $freePorts
 }
 
 function Convert-BinaryToIPAddress {
@@ -126,6 +129,4 @@ Write-Host $listeningPorts
 Write-Host "HOST NELLA RETE:"
 foreach ($ip in $ipRange) {
     Write-Host $ip`n
-    $freePorts = Get-FreePorts -ip $ip
-    Write-Host "FREE PORTS: " $freePorts
 }
