@@ -353,7 +353,7 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 
 		# controllo quante volte deve essere eseguito ancora il comando
 		if($command -ne "" -and $command[1] -ne 0 -and $command.Count -gt 1){
-			if($repeatCode -cgt 1){
+			if($repeatCode -cge 1){
 				$repeatCode -= 1
 			}else{
 				"" | Out-File -FilePath "$PSScriptRoot\command.txt" -Encoding UTF8
