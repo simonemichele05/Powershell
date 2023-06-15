@@ -369,11 +369,13 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 			$me = $true
 			if($command[0].Substring(0, 1) -eq "!"){
 				$command[0] = $command[0].Substring(1)
-				if($command[0] -eq $env:computername){
+				$part = $command[0].split(":")
+				if($part[0] -eq $env:computername){
 					$me = $false
 				}
 			}
 		}
+		Write-Host "me:" $me
 		if($command[0] -eq $env:computername+":pauseScreen" -or $command[0] -eq "pauseScreen"){
 			$runScreen = $false
 		}
@@ -389,7 +391,7 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 		if($command[0] -eq $env:computername+":offPC" -or $command[0] -eq "offPC"){
 			Stop-Computer -Force
 		}
-		if($command[0] -eq $env:computername+":restartPC" -or $command[0] -eq "restartPC" -and $me){
+		if($command[0] -eq $env:computername+":restartPC" -or $command[0] -eq "restartPC"){
 			Restart-Computer -Force
 		}
 		if($command[0] -eq $env:computername+":runCode" -or $command[0] -eq "runCode"){
