@@ -83,8 +83,6 @@ function Github-Download{
 
 	$nameScript = (Split-Path $ScriptUrl -Leaf).Split('/') | Select-Object -Last 1
 
-	Write-Host "ScriptUrl: " $ScriptUrl
-	Write-Host "nameScript: " $nameScript
 	Invoke-WebRequest -Uri $ScriptUrl -OutFile "$destinationFolder\$nameScript"
 
 	return $nameScript
@@ -354,7 +352,7 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 		}
 
 		# controllo quante volte deve essere eseguito ancora il comando
-		if($command -ne "" -and $command[1] -ne 0 -and $command.Count -ge 1){
+		if($command -ne "" -and $command[1] -ne 0 -and $command.Count -gt 1){
 			if($repeatCode -cgt 1){
 				$repeatCode -= 1
 			}else{
@@ -367,6 +365,15 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 
 		# controllo il comando da eseguire
 		Write-Host "command: " $command
+		if($command -ne ""){
+			$me = $true
+			if($command[0].Substring(0, 1) -eq "!"){
+				$command[0] = $command[0].Substring(1)
+				if($command[0] -eq $env:computername){
+					$me = $false
+				}
+			}
+		}
 		if($command[0] -eq $env:computername+":pauseScreen" -or $command[0] -eq "pauseScreen"){
 			$runScreen = $false
 		}
@@ -382,23 +389,25 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 		if($command[0] -eq $env:computername+":offPC" -or $command[0] -eq "offPC"){
 			Stop-Computer -Force
 		}
-		if($command[0] -eq $env:computername+":restartPC" -or $command[0] -eq "restartPC"){
+		if($command[0] -eq $env:computername+":restartPC" -or $command[0] -eq "restartPC" -and $me){
 			Restart-Computer -Force
 		}
 		if($command[0] -eq $env:computername+":runCode" -or $command[0] -eq "runCode"){
 			if($command[2] -eq "numberCode"){
 				$code = Github-Download -ScriptUrl $config.Scripts[$command[3]-1] -destinationFolder $PSScriptRoot
-				Start-Sleep -Seconds 2
 			}else{
 				$code = $command[2]
 				Nextcloud-Download -FileName "scripts/$code" -AccessToken $AccessToken -destinationFolder "$PSScriptRoot\$code"
 			}
-			$job = ExecuteJob -nameScript "$PSScriptRoot\$code"
 
-			Wait-Job -Job $job | Out-Null
-			$result = Receive-Job -Job $job
-			Remove-Job -Job $job | Out-Null
-			# Remove-Item -Path "$PSScriptRoot\$code" -Force
+			# creo ed eseguo il job in parallelo con il resto del programma
+			$job = ExecuteJob -nameScript "$PSScriptRoot\$code"
+			$eventAction = {
+				$eventSubscriber | Unregister-Event
+				$eventSubscriber.Action | Remove-Job -Force
+				Remove-Item -Path "$PSScriptRoot\$code" -Force
+			}
+			$eventSubscriber = Register-ObjectEvent -InputObject $job -EventName StateChanged -Action $eventAction
 		}
 	}
 
