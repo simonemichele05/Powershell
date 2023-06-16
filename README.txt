@@ -1,4 +1,4 @@
-# ====================================================================================================== #
+# ================================================================================================================== #
 
  FUNZIONALITÀ:
   - cancella cronologia esegui e cronologia powershell
@@ -7,14 +7,14 @@
   - carica ogni "interval" secondi lo screenshot dello schermo
   - controllo ogni "command_control" screenshot un file .txt di comando
 
-# ====================================================================================================== #
+# ================================================================================================================== #
 
  FILE DI SUPPORTO:
   - file .json di configurazione per impostare il programma appena avviato
   - file .txt di comando per gestire il programma durante l'esecuzione
   - file .exe salvato nella cartella di startup che esegue il programma all'avvio del computer
 
-# ====================================================================================================== #
+# ================================================================================================================== #
 
  COMANDI:
   - startScreen: avvia l'operazione di creazione e salvataggio screenshot
@@ -27,7 +27,7 @@
   - offPC: spegne il computer
   - restartPC: riavvia il computer
 
-# ====================================================================================================== #
+# ================================================================================================================== #
 
  SINTASSI COMANDI: <destinatario> <comando> <n>
   - destinatario: nome del computer a cui far eseguire il comando
@@ -39,4 +39,4 @@
 	    - n > 0: il comando viene eseguito n volte e al termine il file .txt viene sovrascritto da un file vuoto
 	    - n = 0 o "": il comando viene eseguito all'infinito
 
-# ====================================================================================================== #
+# ================================================================================================================== #
